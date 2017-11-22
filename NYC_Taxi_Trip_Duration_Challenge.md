@@ -2,7 +2,7 @@
 title: "NYC_Taxi_Trip_Duration_Challenge"
 author: "Assadullah_Samir"
 date: "5 November 2017"
-output: 
+output:
     html_document:
     #  keep_md: yes
       code_folding: hide
@@ -13,8 +13,8 @@ output:
       number_sections: yes
       theme: cosmo
       toc: yes
-    
-  
+
+
 ---
 
 
@@ -143,7 +143,7 @@ head(train)
 
 Visualisations of feature distributions and their relations are key to understanding a data set, and they often open up new lines of inquiry. I always recommend to examine the data from as many different perspectives as possible to notice even subtle trends and correlations.
 
-We start with a map of NYC and overlay a managable number of pickup coordinates to get a general overview of the locations and distances in question. 
+We start with a map of NYC and overlay a managable number of pickup coordinates to get a general overview of the locations and distances in question.
 
 
 ```r
@@ -159,7 +159,7 @@ ggmap(nyc_map,extent = "device") +
 ```r
 ggmap(nyc_map,extent = "panel") +
   geom_density2d(aes(x = pickup_longitude, y = pickup_latitude), data = train)+
-  stat_density2d(data = train, aes(x = pickup_longitude, y = pickup_latitude, fill = ..level.., alpha = ..level..),size = 0.01, bins = 16, geom = 'polygon') 
+  stat_density2d(data = train, aes(x = pickup_longitude, y = pickup_latitude, fill = ..level.., alpha = ..level..),size = 0.01, bins = 16, geom = 'polygon')
 ```
 
 ![](fig/unnamed-chunk-7-1.png)<!-- -->
@@ -183,13 +183,13 @@ Over the year, the distributions of *pickup\_datetime* and *dropoff\_datetime* l
 ggplot(train,aes(pickup_datetime)) +geom_histogram(fill = "red", bins = 120) +  labs(x = "Pickup dates")
 ```
 
-<img src="fig/unnamed-chunk-9-1.png" width="100%" height="3" />
+![](fig/unnamed-chunk-9-1.png)<!-- -->
 
 ```r
 ggplot(train, aes(dropoff_datetime)) +geom_histogram(fill = "blue", bins = 120) +  labs(x = "Dropoff dates")
 ```
 
-<img src="fig/unnamed-chunk-10-1.png" width="100%" height="3" />
+![](fig/unnamed-chunk-10-1.png)<!-- -->
 ## Binning of trip_duration
 Duartion of the trips range from 1 sec to over 30 days but most of the journeys are under 1 hour. So binning the duration in 5 minute intervals, upto 1 hour, as trip_length-
 
@@ -197,12 +197,12 @@ Duartion of the trips range from 1 sec to over 30 days but most of the journeys 
 ## Function for trip_duration categorization
 duration.cat <- function(x, lower = 0, upper, by = 300,
                     sep = "-", above.char = "+") {
-  
+
   labs <- c(paste(seq(lower, upper - by, by = by),
                   seq(lower + by - 1, upper - 1, by = by),
                   sep = sep),
             paste(upper, above.char, sep = ""))
-  
+
   cut(floor(x), breaks = c(seq(lower, upper, by = by), Inf),
       right = FALSE, labels = labs)
 }
@@ -238,5 +238,4 @@ ggplot(train,aes(hpick,fill=factor(vendor_id)))+geom_histogram(bins = 24)
 
 ![](fig/unnamed-chunk-14-1.png)<!-- -->
 
-Vendor 2 taxis have consistently longer average *trip_duration accross most hours in all the months. Trips taken during 10am-5pm are longer than other time for both the vendors. 
-
+Vendor 2 taxis have consistently longer average *trip_duration accross most hours in all the months. Trips taken during 10am-5pm are longer than other time for both the vendors.
