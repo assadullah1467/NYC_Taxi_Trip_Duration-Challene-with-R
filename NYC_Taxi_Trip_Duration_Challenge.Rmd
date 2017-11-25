@@ -2,7 +2,7 @@
 title: "NYC_Taxi_Trip_Duration_Challenge"
 author: "Assadullah_Samir"
 date: "5 November 2017"
-output:
+output: 
     html_document:
     #  keep_md: yes
       code_folding: hide
@@ -13,18 +13,21 @@ output:
       number_sections: yes
       theme: cosmo
       toc: yes
-
-
+    
+  
 ---
-
+```{r, echo = FALSE}
+knitr::opts_chunk$set(
+  fig.path = "fig/"
+)
+```
 
 # Introduction
 This is a comprehensive Exploratory Data Analysis for the New York City Taxi Trip Duration competition with tidy R and ggplot2.
 The goal of this playground challenge is to predict the duration of taxi rides in NYC based on features like trip coordinates or pickup date and time. The data comes in the shape of 1.5 million training observations (../input/train.csv) and 630k test observation (../input/test.csv). Each row contains one taxi trip.
 In this notebook, we will first study and visualise the original data, engineer new features, and examine potential outliers. Then we add two external data sets on the NYC weather and on the theoretically fastest routes. We visualise and analyse the new features within these data sets and their impact on the target trip_duration values. Finally, we will make a brief excursion into viewing this challenge as a classification problem and finish this notebook with a simple XGBoost model that provides a basic prediction (final part under construction).
 
-
-```r
+```{r, message=FALSE}
 library('ggplot2') # visualisation
 library('scales') # visualisation
 library('grid') # visualisation
@@ -52,66 +55,20 @@ library("gganimate")
 ```
 Load data
 
-
-```r
+```{r, warning=FALSE, results=FALSE}
 train <- as.tibble(fread('C:/Users/assad/NYC_Kaggle/train.csv'))
 ```
 
 File structure and content
 
-
-```r
+```{r}
 summary(train)
-```
-
-```
-##       id              vendor_id     pickup_datetime    dropoff_datetime  
-##  Length:1458644     Min.   :1.000   Length:1458644     Length:1458644    
-##  Class :character   1st Qu.:1.000   Class :character   Class :character  
-##  Mode  :character   Median :2.000   Mode  :character   Mode  :character  
-##                     Mean   :1.535                                        
-##                     3rd Qu.:2.000                                        
-##                     Max.   :2.000                                        
-##  passenger_count pickup_longitude  pickup_latitude dropoff_longitude
-##  Min.   :0.000   Min.   :-121.93   Min.   :34.36   Min.   :-121.93  
-##  1st Qu.:1.000   1st Qu.: -73.99   1st Qu.:40.74   1st Qu.: -73.99  
-##  Median :1.000   Median : -73.98   Median :40.75   Median : -73.98  
-##  Mean   :1.665   Mean   : -73.97   Mean   :40.75   Mean   : -73.97  
-##  3rd Qu.:2.000   3rd Qu.: -73.97   3rd Qu.:40.77   3rd Qu.: -73.96  
-##  Max.   :9.000   Max.   : -61.34   Max.   :51.88   Max.   : -61.34  
-##  dropoff_latitude store_and_fwd_flag trip_duration    
-##  Min.   :32.18    Length:1458644     Min.   :      1  
-##  1st Qu.:40.74    Class :character   1st Qu.:    397  
-##  Median :40.75    Mode  :character   Median :    662  
-##  Mean   :40.75                       Mean   :    959  
-##  3rd Qu.:40.77                       3rd Qu.:   1075  
-##  Max.   :43.92                       Max.   :3526282
-```
-
-```r
 glimpse(train)
-```
-
-```
-## Observations: 1,458,644
-## Variables: 11
-## $ id                 <chr> "id2875421", "id2377394", "id3858529", "id3...
-## $ vendor_id          <int> 2, 1, 2, 2, 2, 2, 1, 2, 1, 2, 2, 2, 2, 2, 2...
-## $ pickup_datetime    <chr> "2016-03-14 17:24:55", "2016-06-12 00:43:35...
-## $ dropoff_datetime   <chr> "2016-03-14 17:32:30", "2016-06-12 00:54:38...
-## $ passenger_count    <int> 1, 1, 1, 1, 1, 6, 4, 1, 1, 1, 1, 4, 2, 1, 1...
-## $ pickup_longitude   <dbl> -73.98215, -73.98042, -73.97903, -74.01004,...
-## $ pickup_latitude    <dbl> 40.76794, 40.73856, 40.76394, 40.71997, 40....
-## $ dropoff_longitude  <dbl> -73.96463, -73.99948, -74.00533, -74.01227,...
-## $ dropoff_latitude   <dbl> 40.76560, 40.73115, 40.71009, 40.70672, 40....
-## $ store_and_fwd_flag <chr> "N", "N", "N", "N", "N", "N", "N", "N", "N"...
-## $ trip_duration      <int> 455, 663, 2124, 429, 435, 443, 341, 1551, 2...
 ```
 
 Reformating Data to create hour and month of the trips
 
-
-```r
+```{r}
 train <- train %>%
   mutate(pickup_datetime = ymd_hms(pickup_datetime),
          dropoff_datetime = ymd_hms(dropoff_datetime),
@@ -124,66 +81,35 @@ train<-train %>%
 head(train)
 ```
 
-```
-## # A tibble: 6 x 13
-##          id vendor_id     pickup_datetime    dropoff_datetime
-##       <chr>    <fctr>              <dttm>              <dttm>
-## 1 id2875421         2 2016-03-14 17:24:55 2016-03-14 17:32:30
-## 2 id2377394         1 2016-06-12 00:43:35 2016-06-12 00:54:38
-## 3 id3858529         2 2016-01-19 11:35:24 2016-01-19 12:10:48
-## 4 id3504673         2 2016-04-06 19:32:31 2016-04-06 19:39:40
-## 5 id2181028         2 2016-03-26 13:30:55 2016-03-26 13:38:10
-## 6 id0801584         2 2016-01-30 22:01:40 2016-01-30 22:09:03
-## # ... with 9 more variables: passenger_count <fctr>,
-## #   pickup_longitude <dbl>, pickup_latitude <dbl>,
-## #   dropoff_longitude <dbl>, dropoff_latitude <dbl>,
-## #   store_and_fwd_flag <chr>, trip_duration <int>, hpick <int>,
-## #   Month <ord>
-```
-
 # Individual feature visualisations
 
 Visualisations of feature distributions and their relations are key to understanding a data set, and they often open up new lines of inquiry. I always recommend to examine the data from as many different perspectives as possible to notice even subtle trends and correlations.
 
-We start with a map of NYC and overlay a managable number of pickup coordinates to get a general overview of the locations and distances in question.
+We start with a map of NYC and overlay a managable number of pickup coordinates to get a general overview of the locations and distances in question. 
 
-
-```r
+```{r,warning=FALSE, results=FALSE,message=FALSE,fig.width=9}
 set.seed(25)
 foo <- train[sample(nrow(train), 80000), ]
 
-nyc_map <- get_map(location = c(lat =40.75092, lon = -73.97349),
+nyc_map <- get_map(location = c(lat =40.75092, lon = -73.97349), 
                    zoom = 10,maptype="toner-2010",source = "stamen")
 
 ggmap(nyc_map,extent = "device") +
   geom_point(aes(x = pickup_longitude, y = pickup_latitude,color="red"), data = foo, alpha = .5)
-```
 
-![](fig/unnamed-chunk-6-1.png)<!-- -->
-
-```r
 ggmap(nyc_map,extent = "panel") +
   geom_density2d(aes(x = pickup_longitude, y = pickup_latitude), data = train)+
-  stat_density2d(data = train, aes(x = pickup_longitude, y = pickup_latitude, fill = ..level.., alpha = ..level..),size = 0.01, bins = 16, geom = 'polygon')
+  stat_density2d(data = train, aes(x = pickup_longitude, y = pickup_latitude, fill = ..level.., alpha = ..level..),size = 0.01, bins = 16, geom = 'polygon') 
 ```
-
-![](fig/unnamed-chunk-6-2.png)<!-- -->
 It turns out that almost all of our trips were in fact taking place in Manhattan only. Another notable hot-spot is JFK airport towards the south-east of the city.
 
-
-```r
+```{r,warning=FALSE, results=FALSE,message=FALSE,fig.width=9}
 ggmap(nyc_map,extent = "device") +
   geom_point(aes(x = dropoff_longitude, y = dropoff_latitude,color="red"), data = foo, alpha = .5)
-```
 
-![](fig/unnamed-chunk-7-1.png)<!-- -->
-
-```r
 ggmap(nyc_map,extent = "panel") +
-    stat_density2d(data = train, aes(x = dropoff_longitude, y = dropoff_latitude, fill = ..level.., alpha = ..level..),size = 0.01, bins = 16, geom = 'polygon')
+    stat_density2d(data = train, aes(x = dropoff_longitude, y = dropoff_latitude, fill = ..level.., alpha = ..level..),size = 0.01, bins = 16, geom = 'polygon') 
 ```
-
-![](fig/unnamed-chunk-7-2.png)<!-- -->
 The destination points follow similar patterns to the pickup points. Most of the journey originate and end in the central Manhatton area.
 
 
@@ -192,40 +118,30 @@ The maps gives us an idea what some of the our distributions could look like. Le
 
 ## Distribution of log of the trip_duartions
 
-
-```r
+```{r, fig.width=8}
 ggplot(train,aes(trip_duration,fill=vendor_id))+geom_histogram(bins = 100)+scale_x_log10()
 ```
 
-![](fig/unnamed-chunk-8-1.png)<!-- -->
-
 Over the year, the distributions of *pickup\_datetime* and *dropoff\_datetime* look like this:
 
-
-```r
+```{r fig.align = 'default', warning = FALSE, out.width="100%",out.height=3}
 ggplot(train,aes(pickup_datetime)) +geom_histogram(fill = "red", bins = 120) +  labs(x = "Pickup dates")
 ```
-
-![](fig/unnamed-chunk-9-1.png)<!-- -->
-
-```r
+```{r fig.align = 'default', warning = FALSE, out.width="100%",out.height=3}
 ggplot(train, aes(dropoff_datetime)) +geom_histogram(fill = "blue", bins = 120) +  labs(x = "Dropoff dates")
 ```
-
-![](fig/unnamed-chunk-10-1.png)<!-- -->
 ## Binning of trip_duration
 Duartion of the trips range from 1 sec to over 30 days but most of the journeys are under 1 hour. So binning the duration in 5 minute intervals, upto 1 hour, as trip_length-
-
-```r
+```{r}
 ## Function for trip_duration categorization
 duration.cat <- function(x, lower = 0, upper, by = 300,
                     sep = "-", above.char = "+") {
-
+  
   labs <- c(paste(seq(lower, upper - by, by = by),
                   seq(lower + by - 1, upper - 1, by = by),
                   sep = sep),
             paste(upper, above.char, sep = ""))
-
+  
   cut(floor(x), breaks = c(seq(lower, upper, by = by), Inf),
       right = FALSE, labels = labs)
 }
@@ -234,16 +150,12 @@ train<-train %>%
   mutate(trip_length = duration.cat(trip_duration,upper=3600))
 ```
 Distribution of trip_length
-
-```r
+```{r, fig.width=9}
 ggplot(train,aes(trip_length,fill=factor(vendor_id)))+geom_bar()+theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
-
-![](fig/unnamed-chunk-12-1.png)<!-- -->
 Average duration of the trips at diffrent month and hours:
 
-
-```r
+```{r fig.width=9}
 avg_duration=mean(train$trip_duration)
 grp_df<-train%>%
           group_by(Month,hpick,vendor_id)%>%
@@ -251,24 +163,19 @@ grp_df<-train%>%
 ggplot(grp_df,aes(hpick,avg_dur,color=factor(vendor_id)))+geom_line()+facet_grid(Month~.)+
   geom_hline(yintercept = avg_duration, color="yellow")
 ```
-
-![](fig/unnamed-chunk-13-1.png)<!-- -->
 Number of trips at different time of the day:
-
-```r
+```{r}
 ggplot(train,aes(hpick,fill=factor(vendor_id)))+geom_histogram(bins = 24)
-```
 
-![](fig/unnamed-chunk-14-1.png)<!-- -->
+```
 
 Vendor 2 taxis have consistently longer average *trip_duration accross most hours in all the months. Trips happening during 10am-5pm are longer than other time for both the vendors. Majority of the trips happen during the last third of the day.
 
 ## Passenger count and Vendor vs *trip\_duration*
 
-The next question we are asking is whether different numbers of passengers and/or the different vendors are correlated with the duration of the trip. We choose to examine this issue using a series of boxplots for the *passenger\_counts* together with a *facet wrap* which contrasts the two *vendor\_ids*:
+The next question we are asking is whether different numbers of passengers and/or the different vendors are correlated with the duration of the trip. We choose to examine this issue using a series of boxplots for the *passenger\_counts* together with a *facet wrap* which contrasts the two *vendor\_ids*: 
 
-
-```r
+```{r fig.align = 'default', warning = FALSE, out.width="100%"}
 train %>%
   ggplot(aes(passenger_count, trip_duration, color = passenger_count)) +
   geom_boxplot() +
@@ -277,8 +184,6 @@ train %>%
   facet_wrap(~ vendor_id) +
   labs(y = "Trip duration [s]", x = "Number of passengers")
 ```
-
-<img src="fig/unnamed-chunk-15-1.png" width="100%" />
 
 We find:
 
@@ -289,31 +194,20 @@ We find:
 - Between 1 and 6 passengers the median trip durations are remarkably similar, in particular for vendor 2. There might be differences for vendor 1, but they are small (hidden plot; note the logarithmic y-axis).
 
 Comparing the densities of the *trip\_duration* distribution for the two vendors we find that the medians are very similar, whereas the means are likely skewed by vendor 2 containing most of the long-duration outliers:
-
-```r
+```{r eval=FALSE, fig.align = 'default', warning = FALSE, out.width="100%"}
 train %>%
   ggplot(aes(trip_duration, fill = vendor_id)) +
   geom_density(position = "stack") +
   scale_x_log10()
 ```
-
-```r
+```{r}
 train %>%
   group_by(vendor_id) %>%
   summarise(mean_duration = mean(trip_duration),
             median_duration = median(trip_duration))
 ```
-
-```
-## # A tibble: 2 x 3
-##   vendor_id mean_duration median_duration
-##      <fctr>         <dbl>           <dbl>
-## 1         1      845.4382             658
-## 2         2     1058.6432             666
-```
 ## Use H2O to cluster the Pickup points to check whther origin has any impact on *trip_duration*.
-
-```r
+```{r,warning=FALSE, results=FALSE,message=FALSE}
 localH2O = h2o.init(ip = "localhost", port = 54321, startH2O = TRUE)
 
 ## Convert R dataframe to H2O df [subset of train with lat and long]
@@ -339,24 +233,22 @@ train$pick_cluster<-pick_clus
 train$drop_cluster<-drop_clus
 ```
 
-## Check if location dictates duration
+## Check if location dictates duration 
 
-
-```r
+```{r}
 hotspots<-train%>%
             group_by(pick_cluster)%>%
               summarise(pickups=n())%>%arrange(desc(pickups))
 
 plot(cumsum(hotspots$pickups)/sum(hotspots$pickups))
+
 ```
-
-![](fig/unnamed-chunk-19-1.png)<!-- -->
-             98% of the pickups have been generated from the top 25 clusters!
+             98% of the pickups have been generated from the top 25 clusters! 
 
 
 
+```{r ,fig.height=8}
 
-```r
 top25<-hotspots$pick_cluster[1:25]
 
 clustered_df<-train%>% filter(pick_cluster %in% top25)%>%
@@ -366,18 +258,17 @@ clustered_df<-train%>% filter(pick_cluster %in% top25)%>%
 
 ani_p<- ggplot(clustered_df,aes(clus_lon,clus_lat,color=factor(pick_cluster),size=avg_duration,frame=hpick))+geom_point()+facet_grid(vendor_id~.)
 gganimate(ani_p)
+
 ```
 
-![](fig/gg_1.gif)<!-- -->
 
 
 
 
 
-```r
+```{r, fig.height=9}
 boxplot_df<- train%>% filter(pick_cluster %in% top25 & trip_duration<7200)
-
+            
 ggplot(boxplot_df,aes(factor(pick_cluster),trip_duration,color=factor(vendor_id)))+geom_boxplot()+facet_grid(vendor_id~.)
-```
 
-![](fig/unnamed-chunk-21-1.png)<!-- -->
+```
