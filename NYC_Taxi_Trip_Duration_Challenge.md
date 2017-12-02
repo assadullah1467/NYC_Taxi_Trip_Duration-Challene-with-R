@@ -45,10 +45,11 @@ library('ggmap') # maps
 library('maps') # maps
 library('xgboost') # modelling
 library('caret') # modelling
-library('plotly') #visualization
 library ('gridExtra') # arrange plots
 library("h2o")
 library("gganimate")
+library("WRS2") #Robust Statistical tests
+library("bit64") #for JVM H2O
 ```
 Load data
 
@@ -206,13 +207,13 @@ Over the year, the distributions of *pickup\_datetime* and *dropoff\_datetime* l
 ggplot(train,aes(pickup_datetime)) +geom_histogram(fill = "red", bins = 120) +  labs(x = "Pickup dates")
 ```
 
-![](fig/unnamed-chunk-9-1.png)<!-- -->
+<img src="fig/unnamed-chunk-9-1.png" width="100%" height="3" />
 
 ```r
 ggplot(train, aes(dropoff_datetime)) +geom_histogram(fill = "blue", bins = 120) +  labs(x = "Dropoff dates")
 ```
 
-![](fig/unnamed-chunk-10-1.png)<!-- -->
+<img src="fig/unnamed-chunk-10-1.png" width="100%" height="3" />
 ## Binning of trip_duration
 Duartion of the trips range from 1 sec to over 30 days but most of the journeys are under 1 hour. So binning the duration in 5 minute intervals, upto 1 hour, as trip_length-
 
@@ -248,7 +249,7 @@ avg_duration=mean(train$trip_duration)
 grp_df<-train%>%
           group_by(Month,hpick,vendor_id)%>%
           summarise(avg_dur=mean(trip_duration) )
-ggplot(grp_df,aes(hpick,avg_dur,color=factor(vendor_id)))+geom_line()+facet_grid(Month~.)+
+ggplot(grp_df,aes(hpick,avg_dur,color=factor(vendor_id)))+geom_line()+facet_wrap(~Month)+
   geom_hline(yintercept = avg_duration, color="yellow")
 ```
 
@@ -311,7 +312,7 @@ train %>%
 ## 1         1      845.4382             658
 ## 2         2     1058.6432             666
 ```
-## Use H2O to cluster the Pickup points to check whther origin has any impact on *trip_duration*.
+## Use H2O to cluster the Pickup and Dropoff points to check whther origin or destination has any impact on *trip_duration*.
 
 ```r
 localH2O = h2o.init(ip = "localhost", port = 54321, startH2O = TRUE)
@@ -339,7 +340,7 @@ train$pick_cluster<-pick_clus
 train$drop_cluster<-drop_clus
 ```
 
-## Check if location dictates duration
+### Check if Pickup location dictates duration
 
 
 ```r
@@ -351,7 +352,7 @@ plot(cumsum(hotspots$pickups)/sum(hotspots$pickups))
 ```
 
 ![](fig/unnamed-chunk-19-1.png)<!-- -->
-             98% of the pickups have been generated from the top 25 clusters!
+     98% of the pickups have been generated from the top 25 clusters!
 
 
 
@@ -359,25 +360,191 @@ plot(cumsum(hotspots$pickups)/sum(hotspots$pickups))
 ```r
 top25<-hotspots$pick_cluster[1:25]
 
+
 clustered_df<-train%>% filter(pick_cluster %in% top25)%>%
                              group_by(pick_cluster,vendor_id,hpick)%>%
                          summarise(avg_duration=mean(trip_duration), no_of_trips=n(),                                      clus_lon=mean(pickup_longitude),clus_lat=mean(pickup_latitude))
 
 
-ani_p<- ggplot(clustered_df,aes(clus_lon,clus_lat,color=factor(pick_cluster),size=avg_duration,frame=hpick))+geom_point()+facet_grid(vendor_id~.)
-gganimate(ani_p)
+ani_p<- ggmap(nyc_map)+geom_point(data=clustered_df,
+                        aes(x=clus_lon,y=clus_lat,color=factor(pick_cluster),                                   size=avg_duration,frame=hpick))
+
+
+gganimate(ani_p,ani.width=700,ani.height=700)
 ```
 
-![](fig/gg_1.gif)<!-- -->
+![](fig/gg_pick.gif)<!-- -->
 
-
-
+**Check how duration varies from prime locations**
 
 
 ```r
 boxplot_df<- train%>% filter(pick_cluster %in% top25 & trip_duration<7200)
 
-ggplot(boxplot_df,aes(factor(pick_cluster),trip_duration,color=factor(vendor_id)))+geom_boxplot()+facet_grid(vendor_id~.)
+ggplot(boxplot_df,aes(factor(pick_cluster),trip_duration,color=factor(vendor_id),frame=hpick))+geom_boxplot()+facet_grid(vendor_id~.)+theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
 ![](fig/unnamed-chunk-21-1.png)<!-- -->
+
+It seems average trip_duartion is longer in some Pickup clusters than the others. In the all the clusters, the range of duration varies widely.
+
+
+**Check if Dropoff location dictates duration**
+
+
+
+```r
+hotspots_drop<-train%>%
+            group_by(drop_cluster)%>%
+              summarise(dropoffs=n())%>%arrange(desc(dropoffs))
+
+plot(cumsum(hotspots$pickups)/sum(hotspots_drop$dropoffs))
+```
+
+![](fig/unnamed-chunk-22-1.png)<!-- -->
+     Almost like the pickup clusters; 98% of the dropoff happens in the top 22 clusters!
+
+```r
+top22<-hotspots_drop$drop_cluster[1:22]
+
+clustered_df<-train%>% filter(drop_cluster %in% top22)%>%
+                             group_by(drop_cluster,vendor_id,hpick)%>%
+                         summarise(avg_duration=mean(trip_duration), no_of_trips=n(),                                      clus_lon=mean(dropoff_longitude),clus_lat=mean(dropoff_latitude))
+
+
+ani_p<- ggmap(nyc_map)+geom_point(data=clustered_df,
+                                  aes(x=clus_lon,y=clus_lat,                                                                        color=factor(drop_cluster),size=avg_duration,frame=hpick))
+```
+
+```
+## Warning: Ignoring unknown aesthetics: frame
+```
+
+```r
+gganimate(ani_p,ani.width=700,ani.height=700)
+```
+
+![](fig/gg_drop.gif)<!-- -->
+
+
+```r
+boxplot_df<- train%>% filter(drop_cluster %in% top22 & trip_duration<7200)
+
+ggplot(boxplot_df,aes(factor(drop_cluster),trip_duration,color=factor(vendor_id)))+geom_boxplot()+facet_grid(vendor_id~.)+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+![](fig/unnamed-chunk-24-1.png)<!-- -->
+
+
+
+
+```r
+journey_clus<-train%>% group_by(pick_cluster,drop_cluster)%>%
+                          summarise(clus_to_clus_trip=n(),journey_time=mean(trip_duration),
+                                    pick_lon=mean(pickup_longitude),
+                                    pick_lat=mean(pickup_latitude),
+                                    drop_lon=mean(dropoff_longitude),
+                                    drop_lat=mean(dropoff_latitude))%>%
+                          arrange(desc(clus_to_clus_trip))
+
+
+plot(cumsum(journey_clus$clus_to_clus_trip)/sum(journey_clus$clus_to_clus_trip))
+```
+
+![](fig/unnamed-chunk-25-1.png)<!-- -->
+
+Out of 90,000 (300X300) possible combinations, most of the journey in the dataset takes place in between 600 pair of locations!
+
+**Check if workday or weekend have any impact**
+
+
+
+```r
+train %>%
+      mutate(day_of_week = wday(pickup_datetime, label = TRUE)) %>%
+      group_by(day_of_week, vendor_id) %>%
+      ggplot(aes(day_of_week, trip_duration, color = vendor_id)) +
+      geom_boxplot()+scale_y_log10()
+```
+
+![](fig/unnamed-chunk-26-1.png)<!-- -->
+
+
+
+
+
+
+
+
+
+Durationwaise weekdays and weekends are more or less similar, but let's check all our hypothesis and confirm in the following section.
+
+# Statistical Testing of the factors;
+
+## Whether there is a significant diffrence in mean trip_duration between vendors   
+
+
+
+```r
+t_mean<-t.test(trip_duration~vendor_id,data=train,paired=F)
+
+t_mean
+```
+
+```
+##
+## 	Welch Two Sample t-test
+##
+## data:  trip_duration by vendor_id
+## t = -23.942, df = 1188800, p-value < 2.2e-16
+## alternative hypothesis: true difference in means is not equal to 0
+## 95 percent confidence interval:
+##  -230.6582 -195.7516
+## sample estimates:
+## mean in group 1 mean in group 2
+##        845.4382       1058.6432
+```
+check effect-size
+
+
+```r
+## Calculate effect-size
+sqrt(t_mean$statistic[[1]]^2/(t_mean$statistic[[1]]^2+ t_mean$parameter[[1]]))
+```
+
+```
+## [1] 0.02195341
+```
+
+Robust t-test:
+
+```r
+## Test Using a Robust Method
+
+yuen(trip_duration~ vendor_id,data=train,tr=0.1)
+```
+
+```
+## Call:
+## yuen(formula = trip_duration ~ vendor_id, data = train, tr = 0.1)
+##
+## Test statistic: 11.1116 (df = 1151410), p-value = 0
+##
+## Trimmed mean difference:  -10.328
+## 95 percent confidence interval:
+## -12.1498     -8.5062
+```
+
+On average, vendor 2 has longer trip durations. The difference is significant p<0.05; however the it represents a low-size effect r=0.021
+The result of the trimmed robust test suggests that the large difference in mean is due to extreme values, but nonetheless the difference is significant in both tests.
+
+## Whether pickup hour makes a significant difference to the journey time
+...
+...
+....
+...
+...
+.
+
+.
+...
