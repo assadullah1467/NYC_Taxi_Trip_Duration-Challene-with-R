@@ -479,7 +479,7 @@ train %>%
 
 Durationwaise weekdays and weekends are more or less similar, but let's check all our hypothesis and confirm in the following section.
 
-# Statistical Testing of the factors;
+# Statistical Testing of the factors:
 
 ## Whether there is a significant diffrence in mean trip_duration between vendors   
 
@@ -535,8 +535,10 @@ yuen(trip_duration~ vendor_id,data=train,tr=0.1)
 ## -12.1498     -8.5062
 ```
 
-On average, vendor 2 has longer trip durations. The difference is significant p<0.05; however the it represents a low-size effect r=0.021
-The result of the trimmed robust test suggests that the large difference in mean is due to extreme values, but nonetheless the difference is significant in both tests.
+
+The test confirms that- on average, vendor 2 has longer trip durations.
+The result of the trimmed robust test suggests that the large difference in mean is due to extreme values,
+but nonetheless the difference is significant in both tests. Although the effect-size is low, r=0.02195341.
 
 ## Whether pickup hour makes a significant difference to the journey time
 ...
